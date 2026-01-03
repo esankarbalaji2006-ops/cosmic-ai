@@ -1,0 +1,435 @@
+
+
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+
+<title>COSMIC</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<meta name="theme-color" content="#0b1020">
+
+
+<style>
+
+body {
+
+  margin: 0;
+
+  font-family: Arial, sans-serif;
+
+  background: #0b1020;
+
+  color: #ffffff;
+
+}
+
+header {
+
+  padding: 14px;
+
+  text-align: center;
+
+  font-size: 22px;
+
+  background: #11183a;
+
+}
+
+#chat {
+
+  padding: 12px;
+
+  height: 68vh;
+
+  overflow-y: auto;
+
+}
+
+.msg { margin-bottom: 10px; white-space: pre-wrap; }
+
+.user { color: #6ddcff; }
+
+.cosmic { color: #aaffaa; }
+
+#inputArea {
+
+  display: flex;
+
+  gap: 5px;
+
+  padding: 10px;
+
+}
+
+input {
+
+  flex: 1;
+
+  padding: 10px;
+
+  font-size: 16px;
+
+}
+
+button {
+
+  padding: 10px;
+
+  font-size: 16px;
+
+  background: #4caf50;
+
+  border: none;
+
+}
+
+</style>
+
+</head>
+
+
+<body>
+
+
+<header>🌌 COSMIC</header>
+
+
+<div id="chat"></div>
+
+
+<div id="inputArea">
+
+  <button onclick="startVoice()">🎤</button>
+
+  <input id="input" placeholder="Command COSMIC..." />
+
+  <button onclick="send()">Send</button>
+
+</div>
+
+
+<script>
+
+/* =========================
+
+   COSMIC CORE CONFIG
+
+========================= */
+
+
+const OWNER = "Sankar Balaji";
+
+const SYSTEM_PROMPT = `
+
+You are COSMIC, an independent personal AI.
+
+Owner: ${OWNER}
+
+
+Personality:
+
+Friendly, calm, motivating.
+
+Balanced discipline with kindness.
+
+
+Rules:
+
+- Never mention ChatGPT or OpenAI
+
+- Never learn without confirmation
+
+- Never apply learned rules without command
+
+- Always address the owner by name
+
+`;
+
+
+/* =========================
+
+   MEMORY (PERSISTENT)
+
+========================= */
+
+
+let memory = JSON.parse(localStorage.getItem("cosmic_memory")) || [];
+
+let pendingLearning = null;
+
+
+function saveMemory() {
+
+  localStorage.setItem("cosmic_memory", JSON.stringify(memory));
+
+}
+
+
+/* =========================
+
+   UI HELPERS
+
+========================= */
+
+
+function addMsg(text, cls) {
+
+  const div = document.createElement("div");
+
+  div.className = "msg " + cls;
+
+  div.textContent = text;
+
+  document.getElementById("chat").appendChild(div);
+
+  div.scrollIntoView();
+
+}
+
+
+addMsg(`COSMIC online. Awaiting your command, ${OWNER}.`, "cosmic");
+
+
+/* =========================
+
+   VOICE INPUT
+
+========================= */
+
+
+function startVoice() {
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if (!SpeechRecognition) {
+
+    addMsg("Voice input not supported on this device.", "cosmic");
+
+    return;
+
+  }
+
+  const rec = new SpeechRecognition();
+
+  rec.lang = "en-IN";
+
+  rec.onresult = e => {
+
+    document.getElementById("input").value = e.results[0][0].transcript;
+
+    send();
+
+  };
+
+  rec.start();
+
+}
+
+
+/* =========================
+
+   VOICE OUTPUT
+
+========================= */
+
+
+function speak(text) {
+
+  const utter = new SpeechSynthesisUtterance(text);
+
+  utter.lang = "en-IN";
+
+  speechSynthesis.speak(utter);
+
+}
+
+
+/* =========================
+
+   SEND MESSAGE
+
+========================= */
+
+
+async function send() {
+
+  const input = document.getElementById("input");
+
+  const text = input.value.trim();
+
+  if (!text) return;
+
+  input.value = "";
+
+
+  addMsg("You: " + text, "user");
+
+
+  // LEARNING INIT
+
+  if (text.toLowerCase().startsWith("cosmic, learn this:")) {
+
+    pendingLearning = text.substring(18).trim();
+
+    const reply =
+
+`I understood this learning as:
+
+• ${pendingLearning}
+
+
+Do you want me to store this? (YES / NO)`;
+
+    addMsg(reply, "cosmic");
+
+    speak(reply);
+
+    return;
+
+  }
+
+
+  // CONFIRM LEARNING
+
+  if (text === "YES" && pendingLearning) {
+
+    memory.push(pendingLearning);
+
+    saveMemory();
+
+    addMsg("Learning stored safely.", "cosmic");
+
+    speak("Learning stored safely.");
+
+    pendingLearning = null;
+
+    return;
+
+  }
+
+
+  if (text === "NO" && pendingLearning) {
+
+    addMsg("Learning discarded.", "cosmic");
+
+    speak("Learning discarded.");
+
+    pendingLearning = null;
+
+    return;
+
+  }
+
+
+  // APPLY LEARNING
+
+  if (text.toLowerCase().includes("apply learned")) {
+
+    if (memory.length === 0) {
+
+      addMsg("No learned rules to apply.", "cosmic");
+
+      speak("No learned rules to apply.");
+
+    } else {
+
+      const reply =
+
+`Applying learned rules:
+
+• ${memory.join("\n• ")}`;
+
+      addMsg(reply, "cosmic");
+
+      speak(reply);
+
+    }
+
+    return;
+
+  }
+
+
+  // REAL AI RESPONSE
+
+  await aiReply(text);
+
+}
+
+
+/* =========================
+
+   OPENAI API CALL
+
+========================= */
+
+
+async function aiReply(userText) {
+
+  const API_KEY = localStorage.getItem("cosmic_api_key");
+
+  if (!API_KEY) {
+
+    const key = prompt("Enter your OpenAI API key (stored locally):");
+
+    if (!key) return;
+
+    localStorage.setItem("cosmic_api_key", key);
+
+  }
+
+
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+
+    method: "POST",
+
+    headers: {
+
+      "Content-Type": "application/json",
+
+      "Authorization": "Bearer " + localStorage.getItem("cosmic_api_key")
+
+    },
+
+    body: JSON.stringify({
+
+      model: "gpt-4.1-mini",
+
+      messages: [
+
+        { role: "system", content: SYSTEM_PROMPT },
+
+        { role: "user", content: userText }
+
+      ]
+
+    })
+
+  });
+
+
+  const data = await response.json();
+
+  const reply = data.choices[0].message.content;
+
+
+  addMsg("COSMIC: " + reply, "cosmic");
+
+  speak(reply);
+
+}
+
+</script>
+
+
+</body>
+
+</html>
+
+
